@@ -14,11 +14,13 @@ Route::get('think', function () {
     return 'hello,ThinkPHP5!';
 });
 
-Route::get('hello/:name', 'index/hello');
+Route::get('hello/:name', 'index/hello')->middleware('loginCheck');;
 
-Route::get('login', 'index/login');
+Route::get('login', 'index/login')->name(' login')->allowCrossDomain();
 
 Route::get('logout', 'index/logout');
+
+Route::get('hook', 'index/hooks');
 
 Route::get('/', function () {
     return 'Hello,world!';

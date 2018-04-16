@@ -3,7 +3,9 @@ namespace app\index\controller;
 
 require_once (__DIR__.'/../phpcas/CAS.php');
 
+use app\index\hooks\TestHooks;
 use phpCAS;
+use think\facade\Hook;
 
 class Index
 {
@@ -17,8 +19,14 @@ class Index
         return 'hello,' . $name;
     }
 
+
+    /**
+     * phpcas 登入
+     * @return string
+     */
     public function login()
     {
+//        phpCAS::setDebug();
         // Initialize phpCAS
         phpCAS::client(
             CAS_VERSION_2_0,
@@ -28,22 +36,33 @@ class Index
             true
         );
 
-        //登陆成功后跳转的地址 -- 登陆方法中加此句
+        //login and redirect
         $cas_server_url = config('phpcas.cas_host').':'.config('phpcas.cas_port').config('phpcas.cas_context').'/login?embed=true';
         $own_server_url = request()->domain().request()->baseUrl();
         phpCAS::setServerLoginUrl('http://'.$cas_server_url.'&service='.$own_server_url);
 
+        // automatically log the user when there is a cas session opened
+//        phpCAS::setCacheTimesForAuthRecheck(-1);
+
         // For production use set the CA certificate that is the issuer of the cert
         // on the CAS server and uncomment the line below
-        // phpCAS::setCasServerCACert($cas_server_ca_cert_path);
+        if( config('phpcas.cert_way') == 'caCert') {
+            phpCAS::setCasServerCACert(config('phpcas.ca_cert_path'));
+        }
+        else {
+            // For quick testing you can disable SSL validation of the CAS server.
+            // THIS SETTING IS NOT RECOMMENDED FOR PRODUCTION.
+            // VALIDATING THE CAS SERVER IS CRUCIAL TO THE SECURITY OF THE CAS PROTOCOL!
+            phpCAS::setNoCasServerValidation();
+        }
 
-        // For quick testing you can disable SSL validation of the CAS server.
-        // THIS SETTING IS NOT RECOMMENDED FOR PRODUCTION.
-        // VALIDATING THE CAS SERVER IS CRUCIAL TO THE SECURITY OF THE CAS PROTOCOL!
-        phpCAS::setNoCasServerValidation();
-
-        //这里会检测服务器端的退出的通知，就能实现php和其他语言平台间同步登出了
-        phpCAS::handleLogoutRequests(true,array());
+        // 其他服务器退出时是否通知（如果同时还有java 等其他语言的client）
+        if(config('phpcas.log_out_request') == false) {
+            phpCAS::handleLogoutRequests(false);
+        }
+        else {
+            phpCAS::handleLogoutRequests(true);
+        }
 
         // force CAS authentication
         if (phpCAS::checkAuthentication()) {
@@ -57,6 +76,10 @@ class Index
     }
 
 
+    /**
+     * phpcas 登出
+     * @return bool
+     */
     public function logout()
     {
         // Initialize phpCAS
@@ -77,5 +100,18 @@ class Index
 
         phpCAS::logout();
         return true;
+    }
+
+
+    /**
+     * 测试一下钩子的使用
+     * 钩子的具体行为函数定义在TestHooks里的run方法，入口方法可以修改，详细见该类
+     * 找个地方进行一下钩子的注册行为（比如中间件？？？）
+     * 然后，在需要监听的地方listen一下。
+     * 这么干貌似可以解耦代码，随时在程序中"+/-"一段新的代码
+     */
+    public function hooks(){
+        Hook::add('hook_test',TestHooks::class);
+        Hook::listen('hook_test',['name'=>'wangyg']);
     }
 }
